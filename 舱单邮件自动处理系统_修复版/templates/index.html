@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>舱单自动处理系统 - 管理界面</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: #fff;
+            border-bottom: 2px solid #e9ecef;
+            font-weight: bold;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        .status-running {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-stopped {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+        }
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .import-color {
+            color: #3498db;
+        }
+        .export-color {
+            color: #2ecc71;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        .nav-tabs .nav-link {
+            color: #495057;
+            font-weight: 500;
+        }
+        .nav-tabs .nav-link.active {
+            color: #0d6efd;
+            font-weight: bold;
+        }
+        .table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .keyword-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255,255,255,0.8);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-envelope-check me-2"></i>
+                舱单自动处理系统
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link active" href="#" onclick="showTab('dashboard')">
+                    <i class="bi bi-speedometer2 me-1"></i>仪表盘
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('database')">
+                    <i class="bi bi-database me-1"></i>数据库
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('statistics')">
+                    <i class="bi bi-bar-chart me-1"></i>统计
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('logs')">
+                    <i class="bi bi-journal-text me-1"></i>日志
+                </a>
+                <a class="nav-link" href="#" onclick="showTab('tools')">
+                    <i class="bi bi-tools me-1"></i>工具
+                </a>
+                <!-- 添加系统配置链接 -->
+                <a class="nav-link" href="/config">
+                    <i class="bi bi-gear me-1"></i>系统配置
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容区 -->
+    <div class="container-fluid mt-4">
+        <!-- 仪表盘 -->
+        <div id="dashboard-tab" class="tab-content">
+            <!-- 系统状态卡片 -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-cpu me-2"></i>系统状态
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="me-3">
+                                            <i class="bi bi-download import-color" style="font-size: 1.5em;"></i>
+                                        </div>
+                                        <div>
+                                            <div>进口舱单处理</div>
+                                            <div id="import-status" class="status-badge status-stopped">已停止</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="me-3">
+                                            <i class="bi bi-upload export-color" style="font-size: 1.5em;"></i>
+                                        </div>
+                                        <div>
+                                            <div>出口舱单处理</div>
+                                            <div id="export-status" class="status-badge status-stopped">已停止</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-muted small" id="last-check">
+                                最后检查: --
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-calendar-check me-2"></i>今日统计
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="stat-card">
+                                        <div class="import-color stat-number" id="today-import">0</div>
+                                        <div class="stat-label">今日进口</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="stat-card">
+                                        <div class="export-color stat-number" id="today-export">0</div>
+                                        <div class="stat-label">今日出口</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据库统计 -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-database me-2"></i>数据库统计
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3">
+                                    <div class="stat-card">
+                                        <div class="import-color stat-number" id="total-import">0</div>
+                                        <div class="stat-label">进口总记录</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="stat-card">
+                                        <div class="export-color stat-number" id="total-export">0</div>
+                                        <div class="stat-label">出口总记录</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="stat-card">
+                                        <div class="text-primary stat-number" id="total-all">0</div>
+                                        <div class="stat-label">总记录数</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-primary mt-4" onclick="showTab('database')">
+                                        <i class="bi bi-search me-1"></i>查看详情
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计图表 -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-bar-chart me-2"></i>处理趋势
+                            </div>
+                            <div>
+                                <select class="form-select form-select-sm" style="width: auto;" onchange="updateChartDays(this.value)">
+                                    <option value="7">最近7天</option>
+                                    <option value="30" selected>最近30天</option>
+                                    <option value="90">最近90天</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据库页面 -->
+        <div id="database-tab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" onclick="showDatabaseTab('import')">进口数据库</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showDatabaseTab('export')">出口数据库</a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <!-- 搜索和筛选 -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">开始日期</label>
+                            <input type="date" class="form-control" id="db-start-date">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">结束日期</label>
+                            <input type="date" class="form-control" id="db-end-date">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" id="db-keywords" placeholder="多个关键词用逗号分隔">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" onclick="loadDatabase()">
+                                <i class="bi bi-search me-1"></i>搜索
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 进口数据库表格 -->
+                    <div id="import-database" class="database-table">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5>进口舱单记录</h5>
+                            <button class="btn btn-sm btn-outline-primary" onclick="exportCSV('import')">
+                                <i class="bi bi-download me-1"></i>导出CSV
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>处理时间</th>
+                                        <th>发件人</th>
+                                        <th>主题</th>
+                                        <th>关键词</th>
+                                        <th>箱数</th>
+                                        <th>附件</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="import-table-body">
+                                    <!-- 数据将通过JavaScript填充 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div id="import-table-info">显示 0 条记录</div>
+                            <nav>
+                                <ul class="pagination pagination-sm" id="import-pagination">
+                                    <!-- 分页将通过JavaScript生成 -->
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <!-- 出口数据库表格 -->
+                    <div id="export-database" class="database-table" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5>出口舱单记录</h5>
+                            <button class="btn btn-sm btn-outline-primary" onclick="exportCSV('export')">
+                                <i class="bi bi-download me-1"></i>导出CSV
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>处理时间</th>
+                                        <th>发件人</th>
+                                        <th>主题</th>
+                                        <th>关键词</th>
+                                        <th>箱数</th>
+                                        <th>附件</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="export-table-body">
+                                    <!-- 数据将通过JavaScript填充 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div id="export-table-info">显示 0 条记录</div>
+                            <nav>
+                                <ul class="pagination pagination-sm" id="export-pagination">
+                                    <!-- 分页将通过JavaScript生成 -->
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 统计页面 -->
+        <div id="statistics-tab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" onclick="showStatisticsTab('keywords')">关键词统计</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showStatisticsTab('charts')">图表分析</a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <!-- 关键词统计 -->
+                    <div id="keywords-statistics">
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">开始日期</label>
+                                <input type="date" class="form-control" id="stats-start-date">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">结束日期</label>
+                                <input type="date" class="form-control" id="stats-end-date">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button class="btn btn-primary" onclick="loadKeywordStatistics()">
+                                    <i class="bi bi-calculator me-1"></i>统计
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="bi bi-download import-color me-2"></i>进口关键词统计
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="import-keywords-list">
+                                            <div class="text-center text-muted py-3">
+                                                请选择日期范围进行统计
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
+                                            <strong>总计: </strong>
+                                            <span id="import-total-count">0</span> 个附件
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="bi bi-upload export-color me-2"></i>出口关键词统计
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="export-keywords-list">
+                                            <div class="text-center text-muted py-3">
+                                                请选择日期范围进行统计
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
+                                            <strong>总计: </strong>
+                                            <span id="export-total-count">0</span> 个附件
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="bi bi-list-check me-2"></i>关键词汇总
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="all-keywords-list">
+                                            <div class="text-center text-muted py-3">
+                                                所有出现过的关键词将显示在这里
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
+                                            <button class="btn btn-outline-primary" onclick="exportKeywordChart()">
+                                                <i class="bi bi-image me-1"></i>导出图表
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 图表分析 -->
+                    <div id="charts-statistics" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="bi bi-bar-chart me-2"></i>处理趋势图表
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row mb-3">
+                                            <div class="col-md-3">
+                                                <select class="form-select" onchange="loadDailyChart()" id="chart-days">
+                                                    <option value="7">最近7天</option>
+                                                    <option value="30" selected>最近30天</option>
+                                                    <option value="90">最近90天</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <select class="form-select" onchange="loadDailyChart()" id="chart-type">
+                                                    <option value="all">进出口合计</option>
+                                                    <option value="import">仅进口</option>
+                                                    <option value="export">仅出口</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <button class="btn btn-outline-primary" onclick="exportDailyChart()">
+                                                    <i class="bi bi-download me-1"></i>导出图表
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="chart-container">
+                                            <canvas id="dailyChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <i class="bi bi-pie-chart me-2"></i>关键词分布图表
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row mb-3">
+                                            <div class="col-md-3">
+                                                <input type="date" class="form-control" id="keyword-chart-start">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <input type="date" class="form-control" id="keyword-chart-end">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <button class="btn btn-primary" onclick="loadKeywordChart()">
+                                                    <i class="bi bi-refresh me-1"></i>更新图表
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="chart-container">
+                                            <img id="keyword-chart-img" src="" alt="关键词图表" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 日志页面 -->
+        <div id="logs-tab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" onclick="showLogsTab('import')">进口日志</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showLogsTab('export')">出口日志</a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <select class="form-select" id="log-lines" onchange="loadLogs()">
+                                <option value="50">最近50条</option>
+                                <option value="100" selected>最近100条</option>
+                                <option value="200">最近200条</option>
+                                <option value="500">最近500条</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 进口日志 -->
+                    <div id="import-logs" class="logs-table">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>邮件ID</th>
+                                        <th>发件人</th>
+                                        <th>主题</th>
+                                        <th>关键词</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="import-logs-body">
+                                    <!-- 日志数据将通过JavaScript填充 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 出口日志 -->
+                    <div id="export-logs" class="logs-table" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>邮件ID</th>
+                                        <th>发件人</th>
+                                        <th>主题</th>
+                                        <th>关键词</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="export-logs-body">
+                                    <!-- 日志数据将通过JavaScript填充 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工具页面 -->
+        <div id="tools-tab" class="tab-content" style="display: none;">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-chat-dots me-2"></i>短信测试
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">选择测试类型</label>
+                                <select class="form-select" id="sms-type">
+                                    <option value="import">进口舱单短信</option>
+                                    <option value="export">出口舱单短信</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">测试内容</label>
+                                <textarea class="form-control" id="sms-content" rows="3" readonly>
+【天津港集装箱码头有限公司】舱单处理程序测试短信
+                                </textarea>
+                            </div>
+                            <button class="btn btn-primary" onclick="testSMS()">
+                                <i class="bi bi-send me-1"></i>发送测试短信
+                            </button>
+                            <div id="sms-result" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-gear me-2"></i>系统控制
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">系统操作</label>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-success" onclick="startSystem()">
+                                        <i class="bi bi-play-circle me-1"></i>启动处理系统
+                                    </button>
+                                    <button class="btn btn-warning" onclick="syncHistory()">
+                                        <i class="bi bi-arrow-repeat me-1"></i>同步历史邮件
+                                    </button>
+                                    <button class="btn btn-info" onclick="checkDatabase()">
+                                        <i class="bi bi-database-check me-1"></i>检查数据库
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="system-control-result" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-key me-2"></i>关键词管理
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>进口关键词</h6>
+                                    <div id="import-keywords-display" class="mb-3">
+                                        <!-- 关键词将通过JavaScript显示 -->
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>出口关键词</h6>
+                                    <div id="export-keywords-display" class="mb-3">
+                                        <!-- 关键词将通过JavaScript显示 -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <div class="mt-2">加载中...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 全局变量
+        let currentTab = 'dashboard';
+        let currentDatabaseTab = 'import';
+        let currentStatisticsTab = 'keywords';
+        let currentLogsTab = 'import';
+        let trendChart = null;
+        let dailyChart = null;
+
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 设置默认日期
+            const today = new Date().toISOString().split('T')[0];
+            const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            
+            document.getElementById('db-start-date').value = weekAgo;
+            document.getElementById('db-end-date').value = today;
+            document.getElementById('stats-start-date').value = weekAgo;
+            document.getElementById('stats-end-date').value = today;
+            document.getElementById('keyword-chart-start').value = weekAgo;
+            document.getElementById('keyword-chart-end').value = today;
+
+            // 初始化系统
+            loadSystemStatus();
+            loadDatabase();
+            loadKeywordStatistics();
+            loadDailyChart();
+            loadLogs();
+            loadKeywords();
+
+            // 定时刷新系统状态
+            setInterval(loadSystemStatus, 10000);
+            setInterval(loadKeywordChart, 30000); // 30秒更新一次关键词图表
+        });
+
+        // 显示标签页
+        function showTab(tabName) {
+            // 隐藏所有标签页
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // 移除所有导航链接的激活状态
+            document.querySelectorAll('.navbar-nav .nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // 显示选中的标签页
+            document.getElementById(tabName + '-tab').style.display = 'block';
+            
+            // 激活对应的导航链接
+            document.querySelector(`.navbar-nav .nav-link[onclick*="${tabName}"]`).classList.add('active');
+            
+            currentTab = tabName;
+            
+            // 如果是统计页，确保图表正确显示
+            if (tabName === 'statistics') {
+                setTimeout(() => {
+                    if (currentStatisticsTab === 'charts') {
+                        loadDailyChart();
+                        loadKeywordChart();
+                    }
+                }, 100);
+            }
+        }
+
+        // 显示数据库子标签页
+        function showDatabaseTab(tabName) {
+            currentDatabaseTab = tabName;
+            
+            // 更新标签页激活状态
+            document.querySelectorAll('#database-tab .nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 显示对应的数据库表格
+            document.querySelectorAll('.database-table').forEach(table => {
+                table.style.display = 'none';
+            });
+            document.getElementById(tabName + '-database').style.display = 'block';
+            
+            // 加载对应的数据库数据
+            loadDatabase();
+        }
+
+        // 显示统计子标签页
+        function showStatisticsTab(tabName) {
+            currentStatisticsTab = tabName;
+            
+            // 更新标签页激活状态
+            document.querySelectorAll('#statistics-tab .nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 显示对应的统计内容
+            document.getElementById('keywords-statistics').style.display = tabName === 'keywords' ? 'block' : 'none';
+            document.getElementById('charts-statistics').style.display = tabName === 'charts' ? 'block' : 'none';
+            
+            // 如果是图表页，加载图表
+            if (tabName === 'charts') {
+                setTimeout(() => {
+                    loadDailyChart();
+                    loadKeywordChart();
+                }, 100);
+            }
+        }
+
+        // 显示日志子标签页
+        function showLogsTab(tabName) {
+            currentLogsTab = tabName;
+            
+            // 更新标签页激活状态
+            document.querySelectorAll('#logs-tab .nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 显示对应的日志表格
+            document.querySelectorAll('.logs-table').forEach(table => {
+                table.style.display = 'none';
+            });
+            document.getElementById(tabName + '-logs').style.display = 'block';
+            
+            // 加载对应的日志数据
+            loadLogs();
+        }
+
+        // 加载系统状态
+        function loadSystemStatus() {
+            fetch('/api/system/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const status = data.data.system;
+                        const db = data.data.database;
+                        
+                        // 更新系统状态
+                        const importStatus = document.getElementById('import-status');
+                        const exportStatus = document.getElementById('export-status');
+                        
+                        if (status.import_running) {
+                            importStatus.textContent = '运行中';
+                            importStatus.className = 'status-badge status-running';
+                        } else {
+                            importStatus.textContent = '已停止';
+                            importStatus.className = 'status-badge status-stopped';
+                        }
+                        
+                        if (status.export_running) {
+                            exportStatus.textContent = '运行中';
+                            exportStatus.className = 'status-badge status-running';
+                        } else {
+                            exportStatus.textContent = '已停止';
+                            exportStatus.className = 'status-badge status-stopped';
+                        }
+                        
+                        // 更新最后检查时间
+                        document.getElementById('last-check').textContent = `最后检查: ${status.last_check || '--'}`;
+                        
+                        // 更新数据库统计
+                        document.getElementById('today-import').textContent = db.today_import;
+                        document.getElementById('today-export').textContent = db.today_export;
+                        document.getElementById('total-import').textContent = db.import_total;
+                        document.getElementById('total-export').textContent = db.export_total;
+                        document.getElementById('total-all').textContent = db.import_total + db.export_total;
+                    }
+                })
+                .catch(error => {
+                    console.error('加载系统状态失败:', error);
+                });
+        }
+
+        // 加载数据库数据
+        function loadDatabase(page = 1) {
+            showLoading();
+            
+            const startDate = document.getElementById('db-start-date').value;
+            const endDate = document.getElementById('db-end-date').value;
+            const keywords = document.getElementById('db-keywords').value;
+            
+            const endpoint = currentDatabaseTab === 'import' ? '/api/import/database' : '/api/export/database';
+            
+            fetch(`${endpoint}?page=${page}&start_date=${startDate}&end_date=${endDate}&keywords=${keywords}`)
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    
+                    if (data.success) {
+                        renderDatabaseTable(data, currentDatabaseTab);
+                    } else {
+                        alert('加载数据失败: ' + (data.error || '未知错误'));
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    console.error('加载数据库失败:', error);
+                    alert('加载数据库失败: ' + error.message);
+                });
+        }
+
+        // 渲染数据库表格
+        function renderDatabaseTable(data, type) {
+            const tableBody = document.getElementById(`${type}-table-body`);
+            const tableInfo = document.getElementById(`${type}-table-info`);
+            const pagination = document.getElementById(`${type}-pagination`);
+            
+            // 清空表格
+            tableBody.innerHTML = '';
+            
+            if (data.data.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            没有找到匹配的记录
+                        </td>
+                    </tr>
+                `;
+                tableInfo.textContent = '显示 0 条记录';
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            // 填充数据
+            data.data.forEach(item => {
+                const row = document.createElement('tr');
+                
+                // 格式化时间
+                const processedDate = item.processed_date ? item.processed_date.split(' ')[0] : '--';
+                
+                // 截长发件人和主题
+                const sender = item.sender && item.sender.length > 30 ? 
+                    item.sender.substring(0, 30) + '...' : item.sender;
+                const subject = item.subject && item.subject.length > 40 ? 
+                    item.subject.substring(0, 40) + '...' : item.subject;
+                
+                // 关键词标签
+                let keywordBadges = '';
+                if (item.matched_keywords) {
+                    const keywords = item.matched_keywords.split(',');
+                    keywords.forEach(keyword => {
+                        if (keyword.trim()) {
+                            keywordBadges += `<span class="badge keyword-badge">${keyword.trim()}</span>`;
+                        }
+                    });
+                }
+                
+                row.innerHTML = `
+                    <td>${processedDate}</td>
+                    <td title="${item.sender || ''}">${sender || '--'}</td>
+                    <td title="${item.subject || ''}">${subject || '--'}</td>
+                    <td>${keywordBadges || '--'}</td>
+                    <td>${item.container_count || 0}</td>
+                    <td title="${item.attachment_names || ''}">
+                        ${item.txt_attachment ? item.txt_attachment.substring(0, 20) + '...' : '--'}
+                    </td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+            
+            // 更新表格信息
+            const start = (data.page - 1) * data.page_size + 1;
+            const end = Math.min(data.page * data.page_size, data.total);
+            tableInfo.textContent = `显示 ${start}-${end} 条记录，共 ${data.total} 条`;
+            
+            // 生成分页
+            renderPagination(pagination, data.page, data.total_pages, (newPage) => {
+                loadDatabase(newPage);
+            });
+        }
+
+        // 生成分页控件
+        function renderPagination(container, currentPage, totalPages, onClick) {
+            container.innerHTML = '';
+            
+            if (totalPages <= 1) return;
+            
+            // 上一页按钮
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            prevLi.innerHTML = `<a class="page-link" href="#" ${currentPage === 1 ? 'tabindex="-1"' : ''}>上一页</a>`;
+            if (currentPage > 1) {
+                prevLi.querySelector('a').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    onClick(currentPage - 1);
+                });
+            }
+            container.appendChild(prevLi);
+            
+            // 页码按钮
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, startPage + 4);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageLi = document.createElement('li');
+                pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                pageLi.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+                
+                pageLi.querySelector('a').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (i !== currentPage) {
+                        onClick(i);
+                    }
+                });
+                
+                container.appendChild(pageLi);
+            }
+            
+            // 下一页按钮
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            nextLi.innerHTML = `<a class="page-link" href="#" ${currentPage === totalPages ? 'tabindex="-1"' : ''}>下一页</a>`;
+            if (currentPage < totalPages) {
+                nextLi.querySelector('a').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    onClick(currentPage + 1);
+                });
+            }
+            container.appendChild(nextLi);
+        }
+
+        // 加载关键词统计
+        function loadKeywordStatistics() {
+            showLoading();
+            
+            const startDate = document.getElementById('stats-start-date').value;
+            const endDate = document.getElementById('stats-end-date').value;
+            
+            fetch(`/api/statistics/keywords?start_date=${startDate}&end_date=${endDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    
+                    if (data.success) {
+                        renderKeywordStatistics(data.data);
+                    } else {
+                        alert('加载统计失败: ' + (data.error || '未知错误'));
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    console.error('加载关键词统计失败:', error);
+                    alert('加载统计失败: ' + error.message);
+                });
+        }
+
+        // 渲染关键词统计
+        function renderKeywordStatistics(data) {
+            // 进口关键词
+            const importList = document.getElementById('import-keywords-list');
+            importList.innerHTML = '';
+            
+            if (Object.keys(data.import).length === 0) {
+                importList.innerHTML = '<div class="text-center text-muted py-3">没有找到进口关键词统计</div>';
+            } else {
+                let importHtml = '';
+                for (const [keyword, count] of Object.entries(data.import)) {
+                    importHtml += `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>${keyword}</span>
+                            <span class="badge bg-primary">${count}</span>
+                        </div>
+                    `;
+                }
+                importList.innerHTML = importHtml;
+            }
+            
+            document.getElementById('import-total-count').textContent = data.total_import;
+            
+            // 出口关键词
+            const exportList = document.getElementById('export-keywords-list');
+            exportList.innerHTML = '';
+            
+            if (Object.keys(data.export).length === 0) {
+                exportList.innerHTML = '<div class="text-center text-muted py-3">没有找到出口关键词统计</div>';
+            } else {
+                let exportHtml = '';
+                for (const [keyword, count] of Object.entries(data.export)) {
+                    exportHtml += `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>${keyword}</span>
+                            <span class="badge bg-success">${count}</span>
+                        </div>
+                    `;
+                }
+                exportList.innerHTML = exportHtml;
+            }
+            
+            document.getElementById('export-total-count').textContent = data.total_export;
+            
+            // 所有关键词
+            const allKeywordsList = document.getElementById('all-keywords-list');
+            allKeywordsList.innerHTML = '';
+            
+            if (data.all_keywords.length === 0) {
+                allKeywordsList.innerHTML = '<div class="text-center text-muted py-3">没有找到关键词</div>';
+            } else {
+                let allKeywordsHtml = '';
+                data.all_keywords.forEach(keyword => {
+                    const importCount = data.import[keyword] || 0;
+                    const exportCount = data.export[keyword] || 0;
+                    const totalCount = importCount + exportCount;
+                    
+                    allKeywordsHtml += `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <span class="me-3">${keyword}</span>
+                                <span class="badge import-color me-1">进口: ${importCount}</span>
+                                <span class="badge export-color">出口: ${exportCount}</span>
+                            </div>
+                            <span class="badge bg-secondary">总计: ${totalCount}</span>
+                        </div>
+                    `;
+                });
+                allKeywordsList.innerHTML = allKeywordsHtml;
+            }
+        }
+
+        // 加载每日统计图表
+        function loadDailyChart() {
+            const days = document.getElementById('chart-days').value;
+            const type = document.getElementById('chart-type').value;
+            
+            fetch(`/api/chart/daily?days=${days}&type=${type}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.image) {
+                        // 创建图片元素
+                        const img = new Image();
+                        img.src = data.image;
+                        img.onload = function() {
+                            const canvas = document.getElementById('dailyChart');
+                            const ctx = canvas.getContext('2d');
+                            
+                            // 设置canvas尺寸
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            
+                            // 绘制图片
+                            ctx.drawImage(img, 0, 0);
+                        };
+                    }
+                })
+                .catch(error => {
+                    console.error('加载图表失败:', error);
+                });
+        }
+
+        // 加载关键词图表
+        function loadKeywordChart() {
+            const startDate = document.getElementById('keyword-chart-start').value;
+            const endDate = document.getElementById('keyword-chart-end').value;
+            
+            fetch(`/api/chart/keywords?start_date=${startDate}&end_date=${endDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.image) {
+                        document.getElementById('keyword-chart-img').src = data.image;
+                    }
+                })
+                .catch(error => {
+                    console.error('加载关键词图表失败:', error);
+                });
+        }
+
+        // 加载日志
+        function loadLogs() {
+            const lines = document.getElementById('log-lines').value;
+            const endpoint = currentLogsTab === 'import' ? '/api/logs/import' : '/api/logs/export';
+            
+            fetch(`${endpoint}?lines=${lines}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderLogsTable(data.data, currentLogsTab);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载日志失败:', error);
+                });
+        }
+
+        // 渲染日志表格
+        function renderLogsTable(logs, type) {
+            const tableBody = document.getElementById(`${type}-logs-body`);
+            tableBody.innerHTML = '';
+            
+            if (logs.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            没有找到日志记录
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            logs.forEach(log => {
+                const row = document.createElement('tr');
+                
+                // 格式化时间
+                const time = log.timestamp ? log.timestamp.split(' ')[1] : '--';
+                
+                // 状态标签
+                let statusBadge = '';
+                if (log.excel_sent) {
+                    statusBadge = '<span class="badge bg-success">已发送</span>';
+                } else if (log.has_keyword) {
+                    statusBadge = '<span class="badge bg-warning">有关键词</span>';
+                } else {
+                    statusBadge = '<span class="badge bg-secondary">无关键词</span>';
+                }
+                
+                row.innerHTML = `
+                    <td title="${log.timestamp || ''}">${time || '--'}</td>
+                    <td title="${log.email_uid || ''}">${log.email_uid ? log.email_uid.substring(0, 10) + '...' : '--'}</td>
+                    <td title="${log.sender || ''}">${log.sender && log.sender.length > 20 ? log.sender.substring(0, 20) + '...' : log.sender || '--'}</td>
+                    <td title="${log.subject || ''}">${log.subject && log.subject.length > 30 ? log.subject.substring(0, 30) + '...' : log.subject || '--'}</td>
+                    <td>${log.matched_keywords || '--'}</td>
+                    <td>${statusBadge}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        // 加载关键词设置
+        function loadKeywords() {
+            fetch('/api/settings/keywords')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderKeywords(data.data);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载关键词失败:', error);
+                });
+        }
+
+        // 渲染关键词
+        function renderKeywords(data) {
+            // 进口关键词
+            const importDisplay = document.getElementById('import-keywords-display');
+            if (data.import && data.import.length > 0) {
+                let importHtml = '';
+                data.import.forEach(keyword => {
+                    importHtml += `<span class="badge import-color me-1 mb-1">${keyword}</span>`;
+                });
+                importDisplay.innerHTML = importHtml;
+            } else {
+                importDisplay.innerHTML = '<div class="text-muted">未设置关键词</div>';
+            }
+            
+            // 出口关键词
+            const exportDisplay = document.getElementById('export-keywords-display');
+            if (data.export && data.export.length > 0) {
+                let exportHtml = '';
+                data.export.forEach(keyword => {
+                    exportHtml += `<span class="badge export-color me-1 mb-1">${keyword}</span>`;
+                });
+                exportDisplay.innerHTML = exportHtml;
+            } else {
+                exportDisplay.innerHTML = '<div class="text-muted">未设置关键词</div>';
+            }
+        }
+
+        // 测试短信发送
+        function testSMS() {
+            const smsType = document.getElementById('sms-type').value;
+            const resultDiv = document.getElementById('sms-result');
+            
+            resultDiv.innerHTML = '<div class="alert alert-info">正在发送测试短信...</div>';
+            
+            fetch(`/api/sms/test?type=${smsType}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    } else {
+                        resultDiv.innerHTML = `<div class="alert alert-danger">发送失败: ${data.error}</div>`;
+                    }
+                })
+                .catch(error => {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">请求失败: ${error.message}</div>`;
+                    console.error('测试短信失败:', error);
+                });
+        }
+
+        // 启动系统
+        function startSystem() {
+            const resultDiv = document.getElementById('system-control-result');
+            
+            resultDiv.innerHTML = '<div class="alert alert-info">正在启动系统...</div>';
+            
+            fetch('/api/system/start')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                        // 刷新系统状态
+                        setTimeout(loadSystemStatus, 2000);
+                    } else {
+                        resultDiv.innerHTML = `<div class="alert alert-danger">启动失败: ${data.error}</div>`;
+                    }
+                })
+                .catch(error => {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">请求失败: ${error.message}</div>`;
+                    console.error('启动系统失败:', error);
+                });
+        }
+
+        // 同步历史邮件 - 修正版本
+        function syncHistory() {
+            const resultDiv = document.getElementById('system-control-result');
+            resultDiv.innerHTML = '<div class="alert alert-info">正在同步历史邮件...</div>';
+            
+            fetch('/api/system/sync_history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                        if (data.output) {
+                            resultDiv.innerHTML += `<pre class="mt-2" style="font-size: 0.8em;">${data.output}</pre>`;
+                        }
+                    } else {
+                        resultDiv.innerHTML = `<div class="alert alert-danger">${data.message || data.error}</div>`;
+                    }
+                })
+                .catch(error => {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">请求失败: ${error.message}</div>`;
+                    console.error('同步历史邮件失败:', error);
+                });
+        }
+
+        // 检查数据库 - 修正版本
+        function checkDatabase() {
+            const resultDiv = document.getElementById('system-control-result');
+            resultDiv.innerHTML = '<div class="alert alert-info">正在检查数据库...</div>';
+            
+            fetch('/api/system/check_database')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        let html = `<div class="alert alert-success">${data.message}</div>`;
+                        if (data.issues && data.issues.length > 0) {
+                            html += '<ul class="mt-2">';
+                            data.issues.forEach(issue => {
+                                html += `<li>${issue}</li>`;
+                            });
+                            html += '</ul>';
+                        }
+                        resultDiv.innerHTML = html;
+                    } else {
+                        resultDiv.innerHTML = `<div class="alert alert-danger">${data.message || data.error}</div>`;
+                    }
+                })
+                .catch(error => {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">请求失败: ${error.message}</div>`;
+                    console.error('检查数据库失败:', error);
+                });
+        }
+
+        // 导出CSV
+        function exportCSV(type) {
+            const startDate = document.getElementById('db-start-date').value;
+            const endDate = document.getElementById('db-end-date').value;
+            
+            window.open(`/api/export/csv?type=${type}&start_date=${startDate}&end_date=${endDate}`, '_blank');
+        }
+
+        // 导出图表
+        function exportDailyChart() {
+            const days = document.getElementById('chart-days').value;
+            const type = document.getElementById('chart-type').value;
+            
+            const link = document.createElement('a');
+            link.href = `/api/chart/daily?days=${days}&type=${type}&download=1`;
+            link.download = `处理趋势_${days}天_${type}.png`;
+            link.click();
+        }
+
+        function exportKeywordChart() {
+            const startDate = document.getElementById('stats-start-date').value;
+            const endDate = document.getElementById('stats-end-date').value;
+            
+            const link = document.createElement('a');
+            link.href = `/api/chart/keywords?start_date=${startDate}&end_date=${endDate}&download=1`;
+            link.download = `关键词统计_${startDate}_至_${endDate}.png`;
+            link.click();
+        }
+
+        // 更新图表天数
+        function updateChartDays(days) {
+            loadDailyChart();
+        }
+
+        // 显示加载遮罩
+        function showLoading() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        // 隐藏加载遮罩
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

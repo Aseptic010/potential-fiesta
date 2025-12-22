@@ -1,0 +1,647 @@
+<!-- config_fixed.html - 修复版本 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>系统配置 - 舱单邮件自动处理系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <style>
+        .form-control:disabled, .form-select:disabled, textarea:disabled {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+        }
+        .system-running-alert {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: none;
+        }
+        .tab-content {
+            padding: 20px 0;
+        }
+        .form-label {
+            font-weight: 500;
+        }
+        .alert-info {
+            background-color: #e7f3ff;
+            border-color: #b6d4fe;
+            color: #084298;
+        }
+    </style>
+</head>
+<body>
+    <!-- 系统运行提示 -->
+    <div id="systemRunningAlert" class="system-running-alert alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>系统正在运行！</strong> 请先停止系统再修改配置。
+        <button type="button" class="btn-close" onclick="hideSystemRunningAlert()"></button>
+    </div>
+    
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-gear me-2"></i>系统配置</h1>
+            <div>
+                <span id="systemStatusBadge" class="badge bg-secondary me-2">检查中...</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="checkSystemStatus()" id="refreshStatusBtn">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新状态
+                </button>
+            </div>
+        </div>
+        
+        <nav>
+            <div class="nav nav-tabs" id="configTabs" role="tablist">
+                <button class="nav-link active" id="email-tab" data-bs-toggle="tab" data-bs-target="#email" type="button" role="tab">邮箱配置</button>
+                <button class="nav-link" id="keywords-tab" data-bs-toggle="tab" data-bs-target="#keywords" type="button" role="tab">关键词配置</button>
+                <button class="nav-link" id="sms-tab" data-bs-toggle="tab" data-bs-target="#sms" type="button" role="tab">短信配置</button>
+                <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">系统设置</button>
+                <button class="nav-link" id="recipients-tab" data-bs-toggle="tab" data-bs-target="#recipients" type="button" role="tab">额外收件人</button>
+            </div>
+        </nav>
+        
+        <div class="tab-content mt-3" id="configTabsContent">
+            <!-- 邮箱配置表单 -->
+            <div class="tab-pane fade show active" id="email" role="tabpanel">
+                <h3><i class="bi bi-envelope me-2"></i>邮箱配置</h3>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    修改邮箱配置后，需要重新启动系统才能生效
+                </div>
+                <form id="emailForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">进口邮箱地址</label>
+                            <input type="email" class="form-control" id="import_email" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">进口邮箱密码/授权码</label>
+                            <input type="password" class="form-control" id="import_password" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">出口邮箱地址</label>
+                            <input type="email" class="form-control" id="export_email" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">出口邮箱密码/授权码</label>
+                            <input type="password" class="form-control" id="export_password" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">POP3服务器</label>
+                            <input type="text" class="form-control" id="pop3_server" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">POP3端口</label>
+                            <input type="number" class="form-control" id="pop3_port" value="995" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">SMTP服务器</label>
+                            <input type="text" class="form-control" id="smtp_server" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">SMTP端口</label>
+                            <input type="number" class="form-control" id="smtp_port" value="465" required>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="emailSaveBtn">
+                        <i class="bi bi-save me-1"></i>保存配置
+                    </button>
+                    <div id="emailResult" class="mt-2"></div>
+                </form>
+            </div>
+            
+            <!-- 关键词配置表单 -->
+            <div class="tab-pane fade" id="keywords" role="tabpanel">
+                <h3><i class="bi bi-key me-2"></i>关键词配置</h3>
+                <form id="keywordsForm">
+                    <div class="mb-3">
+                        <label class="form-label">进口关键词（每行一个）</label>
+                        <textarea class="form-control" id="import_keywords" rows="5" placeholder="例如：Calcium Nitrate&#10;Calcium Nitrate Tetrahydrate&#10;Magnesium Nitrate Hexahydrate"></textarea>
+                        <div class="form-text">每行输入一个关键词，系统将匹配包含这些关键词的邮件</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">出口关键词（每行一个）</label>
+                        <textarea class="form-control" id="export_keywords" rows="5" placeholder="例如：Calcium Nitrate&#10;Calcium Nitrate Tetrahydrate&#10;Magnesium Nitrate Hexahydrate"></textarea>
+                        <div class="form-text">每行输入一个关键词，系统将匹配包含这些关键词的邮件</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="keywordsSaveBtn">
+                        <i class="bi bi-save me-1"></i>保存配置
+                    </button>
+                    <div id="keywordsResult" class="mt-2"></div>
+                </form>
+            </div>
+            
+            <!-- 短信配置表单 -->
+            <div class="tab-pane fade" id="sms" role="tabpanel">
+                <h3><i class="bi bi-chat-dots me-2"></i>短信配置</h3>
+                <form id="smsForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">短信账户</label>
+                            <input type="text" class="form-control" id="sms_account" placeholder="请输入短信账户">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">短信密码</label>
+                            <input type="password" class="form-control" id="sms_password" placeholder="请输入短信密码">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">目标手机号码（多个用逗号分隔）</label>
+                        <input type="text" class="form-control" id="sms_mobiles" placeholder="例如：18630949579,13800138000">
+                        <div class="form-text">多个手机号码用逗号分隔</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">进口短信模板</label>
+                        <input type="text" class="form-control" id="sms_import_template" placeholder="请输入进口短信模板">
+                        <div class="form-text">使用 {error_msg} 作为错误信息的占位符</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">出口短信模板</label>
+                        <input type="text" class="form-control" id="sms_export_template" placeholder="请输入出口短信模板">
+                        <div class="form-text">使用 {error_msg} 作为错误信息的占位符</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">短信API地址</label>
+                        <input type="url" class="form-control" id="sms_api_url" placeholder="例如：http://sh2.ipyy.com/sms.aspx">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="smsSaveBtn">
+                        <i class="bi bi-save me-1"></i>保存配置
+                    </button>
+                    <div id="smsResult" class="mt-2"></div>
+                </form>
+            </div>
+            
+            <!-- 系统设置表单 -->
+            <div class="tab-pane fade" id="settings" role="tabpanel">
+                <h3><i class="bi bi-sliders me-2"></i>系统设置</h3>
+                <form id="settingsForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">检查间隔（秒）</label>
+                            <input type="number" class="form-control" id="check_interval" min="10" value="30">
+                            <div class="form-text">系统检查新邮件的间隔时间</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">日志保留天数</label>
+                            <input type="number" class="form-control" id="log_retention_days" min="1" value="30">
+                            <div class="form-text">日志文件保留的天数</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">数据库保留天数</label>
+                            <input type="number" class="form-control" id="db_retention_days" min="7" value="90">
+                            <div class="form-text">数据库记录保留的天数</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">界面字体大小</label>
+                            <input type="number" class="form-control" id="font_size" min="8" max="20" value="12">
+                            <div class="form-text">Web界面字体大小（8-20）</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">界面主题</label>
+                        <select class="form-select" id="theme">
+                            <option value="dark-blue">深蓝色</option>
+                            <option value="light-gray">浅灰色</option>
+                            <option value="system">跟随系统</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="settingsSaveBtn">
+                        <i class="bi bi-save me-1"></i>保存配置
+                    </button>
+                    <div id="settingsResult" class="mt-2"></div>
+                </form>
+            </div>
+            
+            <!-- 额外收件人配置 -->
+            <div class="tab-pane fade" id="recipients" role="tabpanel">
+                <h3><i class="bi bi-people me-2"></i>额外收件人配置</h3>
+                <p class="text-muted">自动回复邮件时，除了发件人外，还会发送给以下邮箱地址</p>
+                <form id="recipientsForm">
+                    <div class="mb-3">
+                        <label class="form-label">进口舱单额外收件人（每行一个邮箱）</label>
+                        <textarea class="form-control" id="import_recipients" rows="5" placeholder="例如：abc@example.com&#10;def@example.com"></textarea>
+                        <div class="form-text">每行输入一个邮箱地址</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">出口舱单额外收件人（每行一个邮箱）</label>
+                        <textarea class="form-control" id="export_recipients" rows="5" placeholder="例如：abc@example.com&#10;def@example.com"></textarea>
+                        <div class="form-text">每行输入一个邮箱地址</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="recipientsSaveBtn">
+                        <i class="bi bi-save me-1"></i>保存配置
+                    </button>
+                    <div id="recipientsResult" class="mt-2"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 全局变量
+        let systemRunning = false;
+        
+        // 检查系统状态
+        function checkSystemStatus() {
+            const btn = $('#refreshStatusBtn');
+            const originalText = btn.html();
+            
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> 检查中...');
+            
+            $.ajax({
+                url: '/api/system/status',
+                type: 'GET',
+                success: function(data) {
+                    if (data.success) {
+                        const isRunning = data.data.system.import_running || data.data.system.export_running;
+                        systemRunning = isRunning;
+                        updateFormState(!isRunning);
+                        
+                        const badge = $('#systemStatusBadge');
+                        if (isRunning) {
+                            badge.removeClass('bg-secondary bg-success').addClass('bg-danger').text('系统运行中');
+                            showSystemRunningAlert();
+                        } else {
+                            badge.removeClass('bg-secondary bg-danger').addClass('bg-success').text('系统已停止');
+                            hideSystemRunningAlert();
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    console.error('检查系统状态失败:', xhr);
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        }
+        
+        // 更新表单状态
+        function updateFormState(enabled) {
+            const forms = ['emailForm', 'keywordsForm', 'smsForm', 'settingsForm', 'recipientsForm'];
+            forms.forEach(formId => {
+                const form = document.getElementById(formId);
+                if (form) {
+                    const inputs = form.querySelectorAll('input, textarea, select, button[type="submit"]');
+                    inputs.forEach(input => {
+                        input.disabled = !enabled;
+                        if (input.type === 'submit') {
+                            input.title = enabled ? '' : '请先停止系统';
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 显示系统运行警告
+        function showSystemRunningAlert() {
+            $('#systemRunningAlert').fadeIn();
+        }
+        
+        // 隐藏系统运行警告
+        function hideSystemRunningAlert() {
+            $('#systemRunningAlert').fadeOut();
+        }
+        
+        // 显示操作结果
+        function showResult(containerId, message, type = 'success') {
+            const container = $(containerId);
+            container.html(`<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="bi ${type === 'success' ? 'bi-check-circle' : 'bi-exclamation-triangle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>`);
+            
+            // 5秒后自动隐藏
+            setTimeout(() => {
+                container.find('.alert').alert('close');
+            }, 5000);
+        }
+        
+        // 页面加载完成
+        $(document).ready(function() {
+            // 初始化页面
+            checkSystemStatus();
+            loadConfigData();
+            
+            // 每30秒刷新一次状态
+            setInterval(checkSystemStatus, 30000);
+            
+            // 加载配置数据
+            function loadConfigData() {
+                $.ajax({
+                    url: '/api/config',
+                    type: 'GET',
+                    success: function(data) {
+                        if (data.success) {
+                            const config = data.data;
+                            
+                            // 填充邮箱配置
+                            $('#import_email').val(config.email.import_email || '');
+                            $('#import_password').val(config.email.import_password || '');
+                            $('#export_email').val(config.email.export_email || '');
+                            $('#export_password').val(config.email.export_password || '');
+                            $('#pop3_server').val(config.email.pop3_server || 'pop.qq.com');
+                            $('#pop3_port').val(config.email.pop3_port || 995);
+                            $('#smtp_server').val(config.email.smtp_server || 'smtp.qq.com');
+                            $('#smtp_port').val(config.email.smtp_port || 465);
+                            
+                            // 填充关键词配置
+                            $('#import_keywords').val(config.keywords.import ? config.keywords.import.join('\n') : '');
+                            $('#export_keywords').val(config.keywords.export ? config.keywords.export.join('\n') : '');
+                            
+                            // 填充短信配置
+                            $('#sms_account').val(config.sms.account || '');
+                            $('#sms_password').val(config.sms.password || '');
+                            $('#sms_mobiles').val(config.sms.mobiles || '');
+                            $('#sms_import_template').val(config.sms.import_template || '');
+                            $('#sms_export_template').val(config.sms.export_template || '');
+                            $('#sms_api_url').val(config.sms.api_url || '');
+                            
+                            // 填充系统设置
+                            $('#check_interval').val(config.settings.check_interval || 30);
+                            $('#log_retention_days').val(config.settings.log_retention_days || 30);
+                            $('#db_retention_days').val(config.settings.db_retention_days || 90);
+                            $('#font_size').val(config.settings.font_size || 12);
+                            $('#theme').val(config.settings.theme || 'dark-blue');
+                            
+                            // 填充额外收件人
+                            $('#import_recipients').val(config.additional_recipients.import ? config.additional_recipients.import.join('\n') : '');
+                            $('#export_recipients').val(config.additional_recipients.export ? config.additional_recipients.export.join('\n') : '');
+                        } else {
+                            showResult('#emailResult', '加载配置失败: ' + data.message, 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        showResult('#emailResult', '加载配置失败: ' + xhr.statusText, 'danger');
+                    }
+                });
+            }
+            
+            // 邮箱配置表单提交
+            $('#emailForm').submit(function(e) {
+                e.preventDefault();
+                
+                if (systemRunning) {
+                    alert('系统正在运行，请先停止系统再修改配置');
+                    return;
+                }
+                
+                const btn = $('#emailSaveBtn');
+                const originalText = btn.html();
+                
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> 保存中...');
+                
+                const emailConfig = {
+                    import_email: $('#import_email').val(),
+                    import_password: $('#import_password').val(),
+                    export_email: $('#export_email').val(),
+                    export_password: $('#export_password').val(),
+                    pop3_server: $('#pop3_server').val(),
+                    pop3_port: parseInt($('#pop3_port').val()),
+                    smtp_server: $('#smtp_server').val(),
+                    smtp_port: parseInt($('#smtp_port').val())
+                };
+                
+                $.ajax({
+                    url: '/api/config/email',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(emailConfig),
+                    success: function(data) {
+                        if (data.success) {
+                            showResult('#emailResult', '邮箱配置已保存！请重启系统使配置生效。');
+                        } else {
+                            showResult('#emailResult', '保存失败: ' + data.message, 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        showResult('#emailResult', '请求失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+            
+            // 关键词配置表单提交
+            $('#keywordsForm').submit(function(e) {
+                e.preventDefault();
+                
+                if (systemRunning) {
+                    alert('系统正在运行，请先停止系统再修改配置');
+                    return;
+                }
+                
+                const btn = $('#keywordsSaveBtn');
+                const originalText = btn.html();
+                
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> 保存中...');
+                
+                const importKeywords = $('#import_keywords').val()
+                    .split('\n')
+                    .map(k => k.trim())
+                    .filter(k => k !== '');
+                
+                const exportKeywords = $('#export_keywords').val()
+                    .split('\n')
+                    .map(k => k.trim())
+                    .filter(k => k !== '');
+                
+                $.ajax({
+                    url: '/api/config/keywords',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        import: importKeywords,
+                        export: exportKeywords
+                    }),
+                    success: function(data) {
+                        if (data.success) {
+                            showResult('#keywordsResult', '关键词配置已保存！');
+                            // 同时更新工具页面的关键词显示
+                            updateToolsKeywords(importKeywords, exportKeywords);
+                        } else {
+                            showResult('#keywordsResult', '保存失败: ' + data.message, 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        showResult('#keywordsResult', '请求失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+            
+            // 短信配置表单提交
+            $('#smsForm').submit(function(e) {
+                e.preventDefault();
+                
+                if (systemRunning) {
+                    alert('系统正在运行，请先停止系统再修改配置');
+                    return;
+                }
+                
+                const btn = $('#smsSaveBtn');
+                const originalText = btn.html();
+                
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> 保存中...');
+                
+                const smsConfig = {
+                    account: $('#sms_account').val(),
+                    password: $('#sms_password').val(),
+                    mobiles: $('#sms_mobiles').val(),
+                    import_template: $('#sms_import_template').val(),
+                    export_template: $('#sms_export_template').val(),
+                    api_url: $('#sms_api_url').val()
+                };
+                
+                $.ajax({
+                    url: '/api/config/sms',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(smsConfig),
+                    success: function(data) {
+                        if (data.success) {
+                            showResult('#smsResult', '短信配置已保存！');
+                        } else {
+                            showResult('#smsResult', '保存失败: ' + data.message, 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        showResult('#smsResult', '请求失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+            
+            // 系统设置表单提交
+            $('#settingsForm').submit(function(e) {
+                e.preventDefault();
+                
+                if (systemRunning) {
+                    alert('系统正在运行，请先停止系统再修改配置');
+                    return;
+                }
+                
+                const btn = $('#settingsSaveBtn');
+                const originalText = btn.html();
+                
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> 保存中...');
+                
+                const settings = {
+                    check_interval: parseInt($('#check_interval').val()) || 30,
+                    log_retention_days: parseInt($('#log_retention_days').val()) || 30,
+                    db_retention_days: parseInt($('#db_retention_days').val()) || 90,
+                    theme: $('#theme').val() || 'dark-blue',
+                    font_size: parseInt($('#font_size').val()) || 12
+                };
+                
+                $.ajax({
+                    url: '/api/config/settings',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(settings),
+                    success: function(data) {
+                        if (data.success) {
+                            showResult('#settingsResult', '系统设置已保存！');
+                        } else {
+                            showResult('#settingsResult', '保存失败: ' + data.message, 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        showResult('#settingsResult', '请求失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+            
+            // 额外收件人配置表单提交
+            $('#recipientsForm').submit(function(e) {
+                e.preventDefault();
+                
+                if (systemRunning) {
+                    alert('系统正在运行，请先停止系统再修改配置');
+                    return;
+                }
+                
+                const btn = $('#recipientsSaveBtn');
+                const originalText = btn.html();
+                
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> 保存中...');
+                
+                const importRecipients = $('#import_recipients').val()
+                    .split('\n')
+                    .map(r => r.trim())
+                    .filter(r => r !== '');
+                
+                const exportRecipients = $('#export_recipients').val()
+                    .split('\n')
+                    .map(r => r.trim())
+                    .filter(r => r !== '');
+                
+                $.ajax({
+                    url: '/api/config/recipients',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        import: importRecipients,
+                        export: exportRecipients
+                    }),
+                    success: function(data) {
+                        if (data.success) {
+                            showResult('#recipientsResult', '额外收件人配置已保存！');
+                        } else {
+                            showResult('#recipientsResult', '保存失败: ' + data.message, 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        showResult('#recipientsResult', '请求失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+            
+            // 更新工具页面的关键词显示
+            function updateToolsKeywords(importKeywords, exportKeywords) {
+                // 如果工具页面当前是打开的，更新显示
+                if (typeof window.parent !== 'undefined' && window.parent.loadKeywords) {
+                    window.parent.loadKeywords();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
