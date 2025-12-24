@@ -16,17 +16,18 @@ import sqlite3
 import re
 import sys
 from email.header import decode_header
+from config_manager import ConfigManager
 
 # 导入现有模块的函数
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# 配置参数（应该从主配置文件读取，这里先使用默认值）
+# 配置参数（默认值；实际运行时会由 ConfigManager 覆盖）
 email_address = "zhang.peiying@coscoshipping.com"
 password = "29CqCF5ZRUbcqIKG"
 pop3_server = "mail.coscoshipping.com"
 pop3_port = 995
 
-# 数据库文件（使用现有的数据库）
+# 数据库文件（使用现有的数据库，后续由 ConfigManager 覆盖）
 IMPORT_DB_FILE = 'processed_emails_import.db'
 EXPORT_DB_FILE = 'processed_emails.db'
 
@@ -53,6 +54,8 @@ class HistoryMailSync:
             config_path: 配置文件路径
         """
         self.config_path = config_path
+        self.import_db_file = IMPORT_DB_FILE
+        self.export_db_file = EXPORT_DB_FILE
         self.email_config = self.load_email_config()
         
         # 统计信息
@@ -68,55 +71,37 @@ class HistoryMailSync:
     def load_email_config(self):
         """加载邮箱配置"""
         try:
-            import configparser
-            config = configparser.ConfigParser()
-            
-            if os.path.exists(self.config_path):
-                config.read(self.config_path, encoding='utf-8')
-                
-                email_config = {
-                    'email_address': config.get('email', '进口邮箱地址', fallback=email_address),
-                    'password': config.get('email', '进口邮箱密码', fallback=password),
-                    'pop3_server': config.get('email', 'pop3服务器', fallback=pop3_server),
-                    'pop3_port': config.getint('email', 'pop3端口', fallback=pop3_port),
-                    'keywords': {
-                        'import': [],
-                        'export': []
-                    }
+            cm = ConfigManager(self.config_path)
+            email_cfg = cm.get_email_config()
+            file_paths = cm.get_file_paths()
+            keyword_cfg = cm.get_keywords()
+
+            self.import_db_file = file_paths.get('import_db', IMPORT_DB_FILE)
+            self.export_db_file = file_paths.get('export_db', EXPORT_DB_FILE)
+
+            return {
+                'email_address': email_cfg.get('import_email', email_address),
+                'password': email_cfg.get('import_password', password),
+                'pop3_server': email_cfg.get('pop3_server', pop3_server),
+                'pop3_port': email_cfg.get('pop3_port', pop3_port),
+                'keywords': {
+                    'import': keyword_cfg.get('import', IMPORT_KEYWORDS),
+                    'export': keyword_cfg.get('export', EXPORT_KEYWORDS)
                 }
-                
-                # 从配置文件加载关键词
-                if 'keywords' in config:
-                    for key in config['keywords']:
-                        value = config['keywords'][key]
-                        if value.strip():
-                            if key.startswith('进口关键词'):
-                                email_config['keywords']['import'].append(value.strip())
-                            elif key.startswith('出口关键词'):
-                                email_config['keywords']['export'].append(value.strip())
-                
-                # 如果配置文件中没有关键词，使用默认值
-                if not email_config['keywords']['import']:
-                    email_config['keywords']['import'] = IMPORT_KEYWORDS
-                if not email_config['keywords']['export']:
-                    email_config['keywords']['export'] = EXPORT_KEYWORDS
-                    
-                return email_config
-                
+            }
         except Exception as e:
             logging.error(f"加载配置文件失败: {e}")
-            
-        # 返回默认配置
-        return {
-            'email_address': email_address,
-            'password': password,
-            'pop3_server': pop3_server,
-            'pop3_port': pop3_port,
-            'keywords': {
-                'import': IMPORT_KEYWORDS,
-                'export': EXPORT_KEYWORDS
+            # 返回默认配置
+            return {
+                'email_address': email_address,
+                'password': password,
+                'pop3_server': pop3_server,
+                'pop3_port': pop3_port,
+                'keywords': {
+                    'import': IMPORT_KEYWORDS,
+                    'export': EXPORT_KEYWORDS
+                }
             }
-        }
     
     def decode_email_header(self, header):
         """解码邮件头"""
@@ -299,7 +284,8 @@ class HistoryMailSync:
                 return False
             
             # 检查是否已处理（检查数据库）
-            for db_file, db_type in [(IMPORT_DB_FILE, 'import'), (EXPORT_DB_FILE, 'export')]:
+            for db_file, db_type in [(self.import_db_file, 'import'), (self.export_db_file, 'export')]:
+                self.ensure_db_schema(db_file, db_type)
                 if os.path.exists(db_file):
                     conn = sqlite3.connect(db_file)
                     cursor = conn.cursor()
@@ -348,13 +334,14 @@ class HistoryMailSync:
     def sync_to_import_db(self, email_uid, subject, sender, date, filename, content):
         """同步到进口数据库"""
         try:
-            self.ensure_sync_column_exists(IMPORT_DB_FILE)
+            self.ensure_db_schema(self.import_db_file, 'import')
+            self.ensure_sync_column_exists(self.import_db_file)
             # 检查是否包含关键词
             found_keywords = self.check_keywords_in_text(content, 'import')
             matched_keywords_str = ','.join(found_keywords) if found_keywords else '历史同步'
             
             # 连接进口数据库
-            conn = sqlite3.connect(IMPORT_DB_FILE)
+            conn = sqlite3.connect(self.import_db_file)
             cursor = conn.cursor()
             
             # 确保表存在
@@ -397,6 +384,75 @@ class HistoryMailSync:
             return False
 
     ##新增
+    def ensure_db_schema(self, db_file, db_type):
+        """确保数据库表结构符合主程序要求"""
+        try:
+            conn = sqlite3.connect(db_file)
+            cursor = conn.cursor()
+
+            if db_type == 'import':
+                cursor.execute('''
+                CREATE TABLE IF NOT EXISTS keyword_emails (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email_uid TEXT NOT NULL,
+                    sender TEXT NOT NULL,
+                    sender_address TEXT,
+                    subject TEXT NOT NULL,
+                    received_date TEXT,
+                    processed_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    matched_keywords TEXT NOT NULL,
+                    excel_sent INTEGER DEFAULT 1,
+                    txt_attachment TEXT,
+                    container_count INTEGER DEFAULT 0,
+                    attachment_names TEXT,
+                    english_goods_descriptions TEXT,
+                    chinese_goods_descriptions TEXT,
+                    sync_source TEXT DEFAULT '',
+                    UNIQUE(email_uid)
+                )
+                ''')
+            else:
+                cursor.execute('''
+                CREATE TABLE IF NOT EXISTS keyword_emails (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email_uid TEXT NOT NULL,
+                    sender TEXT NOT NULL,
+                    sender_address TEXT,
+                    subject TEXT NOT NULL,
+                    received_date TEXT,
+                    processed_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    matched_keywords TEXT NOT NULL,
+                    excel_sent INTEGER DEFAULT 1,
+                    txt_attachment TEXT,
+                    container_count INTEGER DEFAULT 0,
+                    attachment_names TEXT,
+                    english_goods_descriptions TEXT,
+                    chinese_goods_descriptions TEXT,
+                    sync_source TEXT DEFAULT '',
+                    UNIQUE(email_uid)
+                )
+                ''')
+
+            # 对齐新增列
+            cursor.execute("PRAGMA table_info(keyword_emails)")
+            columns = [info[1] for info in cursor.fetchall()]
+            for col in ('english_goods_descriptions', 'chinese_goods_descriptions'):
+                if col not in columns:
+                    cursor.execute(f'ALTER TABLE keyword_emails ADD COLUMN {col} TEXT')
+            if 'sync_source' not in columns:
+                cursor.execute("ALTER TABLE keyword_emails ADD COLUMN sync_source TEXT DEFAULT ''")
+
+            # 基础索引
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_email_uid ON keyword_emails(email_uid)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_processed_date ON keyword_emails(processed_date)')
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logging.error(f"确保数据库结构失败 ({db_file}): {e}")
+            return False
+
     def ensure_sync_column_exists(self, db_file):
         """确保数据库表中有sync_source列"""
         try:
@@ -406,9 +462,11 @@ class HistoryMailSync:
             # 检查表是否存在
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='keyword_emails'")
             if not cursor.fetchone():
-                logging.error(f"表keyword_emails不存在于{db_file}")
+                logging.info(f"表keyword_emails不存在于{db_file}，自动创建...")
+                db_type = 'export' if db_file == self.export_db_file else 'import'
+                self.ensure_db_schema(db_file, db_type)
                 conn.close()
-                return False
+                return True
             
             # 检查列是否存在
             cursor.execute("PRAGMA table_info(keyword_emails)")
@@ -431,13 +489,14 @@ class HistoryMailSync:
     def sync_to_export_db(self, email_uid, subject, sender, date, filename, content):
         """同步到出口数据库"""
         try:
-            self.ensure_sync_column_exists(IMPORT_DB_FILE)
+            self.ensure_db_schema(self.export_db_file, 'export')
+            self.ensure_sync_column_exists(self.export_db_file)
             # 检查是否包含关键词
             found_keywords = self.check_keywords_in_text(content, 'export')
             matched_keywords_str = ','.join(found_keywords) if found_keywords else '历史同步'
             
             # 连接出口数据库
-            conn = sqlite3.connect(EXPORT_DB_FILE)
+            conn = sqlite3.connect(self.export_db_file)
             cursor = conn.cursor()
             
             # 确保表存在
@@ -651,6 +710,7 @@ class HistoryMailSync:
             logging.info(f"同步完成，总计处理 {self.stats['total_emails']} 封邮件")
             
             return {
+                'success': True,
                 'total': self.stats['total_emails'],
                 'import': self.stats['import_synced'],
                 'export': self.stats['export_synced'],
@@ -669,7 +729,12 @@ class HistoryMailSync:
             if progress_callback:
                 progress_callback(0, 0, f"同步失败: {str(e)}")
             
-            raise
+            return {
+                'success': False,
+                'status': 'failed',
+                'message': str(e),
+                'error': self.stats.get('error', 0)
+            }
     
     def get_sync_summary(self):
         """获取同步摘要信息"""
