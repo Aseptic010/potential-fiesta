@@ -286,9 +286,10 @@ class ConfigManager:
             # 自动维护“关键词 -> 中文货名”映射：
             # - 用户只配置关键词
             # - 系统自动补齐未存在的中文映射
+            # - 移除已删除关键词的旧映射，避免配置漂移
             # - 未知关键词默认回填英文关键词（避免Excel中文列为空）
-            self._ensure_keyword_translations(list(set(import_keywords + export_keywords)))
-            
+            self._sync_keyword_translations(list(set(import_keywords + export_keywords)))
+
             # 保存配置
             if self.save_config():
                 self.update_runtime_config()
@@ -316,11 +317,18 @@ class ConfigManager:
         }
         return builtin.get(keyword, keyword)
 
-    def _ensure_keyword_translations(self, keywords_list):
-        """确保 keyword_translation 节中包含所有关键词的中文映射"""
+    def _sync_keyword_translations(self, keywords_list):
+        """确保 keyword_translation 节与当前关键词列表保持同步"""
         try:
             if not self.config.has_section('keyword_translation'):
                 self.config.add_section('keyword_translation')
+
+            normalized_keywords = {kw.strip() for kw in keywords_list if kw and kw.strip()}
+
+            # 移除已经被删除的关键词映射，避免中文翻译与实际关键词不一致
+            for existing_kw in list(self.config['keyword_translation'].keys()):
+                if existing_kw not in normalized_keywords:
+                    self.config.remove_option('keyword_translation', existing_kw)
 
             for kw in keywords_list:
                 kw = (kw or '').strip()
