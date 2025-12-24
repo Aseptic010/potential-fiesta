@@ -445,6 +445,7 @@ def save_system_settings():
 
 @app.route('/config')
 def config_page():
+    ensure_template_files()
     return render_template('config_fixed.html')  # 使用修复后的配置页面
 
 
@@ -499,6 +500,7 @@ def save_recipients():
 @app.route('/')
 def index():
     """主页"""
+    ensure_template_files()
     return render_template('index.html')
 
 # 修改原有的系统状态接口
@@ -1394,6 +1396,7 @@ def test_sms():
 # 添加新的配置页面路由
 @app.route('/config/fixed')
 def config_fixed_page():
+    ensure_template_files()
     return render_template('config_fixed.html')
 
 # 添加配置检查路由
@@ -1721,14 +1724,11 @@ def run_export_processor():
         logger.error(f"出口处理程序运行失败: {e}")
 
 def create_html_templates():
-    """创建HTML模板文件"""
+    """创建HTML模板文件（仅在缺失时写入，避免覆盖用户自定义文件）"""
     # 确保模板目录存在
     os.makedirs('templates', exist_ok=True)
     
     # 主页面模板（使用之前提供的完整HTML代码）
-    # 这里为了节省空间，不重复写入完整的HTML
-    # 使用之前提供的完整HTML代码
-    
     index_html = '''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -3138,11 +3138,62 @@ def create_html_templates():
 </body>
 </html>'''
     
-    # 写入主页面模板
-    with open('templates/index.html', 'w', encoding='utf-8') as f:
-        f.write(index_html)
+    # 配置页面模板（精简版，仅提供引导与基本信息展示）
+    config_html = '''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>配置中心 - 舱单自动处理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<div class="container py-4">
+    <div class="mb-4">
+        <h2 class="fw-bold">配置中心</h2>
+        <p class="text-muted">通过前端调用后端 API 完成配置修改。若需要更丰富的前端界面，可在 <code>templates/config_fixed.html</code> 上自行扩展。</p>
+    </div>
+
+    <div class="alert alert-info">
+        <div class="fw-bold mb-2">可用接口</div>
+        <ul class="mb-0">
+            <li><code>GET /api/config</code>：查看当前配置</li>
+            <li><code>POST /api/config/keywords</code>：保存关键词（JSON: {"import": [...], "export": [...]})</li>
+            <li><code>POST /api/config/sms</code>：保存短信配置</li>
+            <li><code>POST /api/config/settings</code>：保存系统参数</li>
+            <li><code>POST /api/config/recipients</code>：保存额外收件人</li>
+        </ul>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h5 class="card-title">提示</h5>
+            <p class="card-text mb-1">1. 启动前请确保后端服务可访问数据库及配置文件。</p>
+            <p class="card-text mb-1">2. 如需图形化配置，请在本模板基础上补充表单并调用上述接口。</p>
+            <p class="card-text">3. 若模板文件缺失，系统会自动重新生成该页面。</p>
+        </div>
+    </div>
+</div>
+</body>
+</html>'''
     
-    print("✅ HTML模板创建完成")
+    # 写入主页面模板（仅在缺失时创建）
+    index_path = os.path.join('templates', 'index.html')
+    if not os.path.exists(index_path):
+        with open(index_path, 'w', encoding='utf-8') as f:
+            f.write(index_html)
+    
+    # 写入配置页面模板（仅在缺失时创建）
+    config_path = os.path.join('templates', 'config_fixed.html')
+    if not os.path.exists(config_path):
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.write(config_html)
+    
+    print("✅ HTML模板检查完成（缺失则已创建）")
+
+def ensure_template_files():
+    """确保关键模板存在"""
+    create_html_templates()
 
 if __name__ == '__main__':
     # 创建必要的目录
